@@ -3,202 +3,158 @@
 if (!defined('WPINC')) {
     die;
 }
-
-// Mevcut kullanıcı bilgisini al
 $current_user = wp_get_current_user();
 ?>
-
-<div class="wrap bkm-aksiyon-wrap">
+    
     <div class="bkm-header">
-        <h1 class="wp-heading-inline">BKM Aksiyon Takip</h1>
-        <a href="<?php echo admin_url('admin.php?page=bkm-aksiyon-ekle'); ?>" class="page-title-action">Yeni Aksiyon Ekle</a>
-        <hr class="wp-header-end">
-    </div>
+        <div class="header-left">
+            <h1>BKM Aksiyon Takip Sistemi</h1>
+            <p>Hoş geldin, <?php echo esc_html(wp_get_current_user()->display_name); ?></p>
+        </div>
 
-    <!-- Özet Kartları -->
-    <div class="bkm-dashboard-summary">
-        <div class="summary-card">
-            <div class="card-icon pending">
-                <span class="dashicons dashicons-clock"></span>
+    <!-- Stats -->
+    <div class="stats-container">
+        <div class="stat-card stat-pending">
+            <div class="stat-icon">
+                <i class="fas fa-clock fa-lg"></i>
             </div>
-            <div class="card-content">
-                <h3>Bekleyen Aksiyonlar</h3>
-                <?php
-                global $wpdb;
-                $pending_count = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}bkm_aksiyonlar WHERE kapanma_tarihi IS NULL");
-                ?>
-                <span class="count"><?php echo $pending_count ?? '0'; ?></span>
+            <div class="stat-value" data-value="<?php echo $pending_count; ?>">
+                <?php echo $pending_count; ?>
+            </div>
+            <div class="stat-label">Bekleyen Aksiyonlar</div>
+            <div class="stat-trend trend-up">
+                <i class="fas fa-arrow-up"></i>
+                12% artış
             </div>
         </div>
 
-        <div class="summary-card">
-            <div class="card-icon completed">
-                <span class="dashicons dashicons-yes-alt"></span>
+        <div class="stat-card stat-completed">
+            <div class="stat-icon">
+                <i class="fas fa-check-circle fa-lg"></i>
             </div>
-            <div class="card-content">
-                <h3>Tamamlanan Aksiyonlar</h3>
-                <?php
-                $completed_count = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}bkm_aksiyonlar WHERE kapanma_tarihi IS NOT NULL");
-                ?>
-                <span class="count"><?php echo $completed_count ?? '0'; ?></span>
+            <div class="stat-value" data-value="<?php echo $completed_count; ?>">
+                <?php echo $completed_count; ?>
             </div>
-        </div>
-
-        <div class="summary-card">
-            <div class="card-icon urgent">
-                <span class="dashicons dashicons-warning"></span>
-            </div>
-            <div class="card-content">
-                <h3>Acil Aksiyonlar</h3>
-                <?php
-                $urgent_count = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}bkm_aksiyonlar WHERE onem_derecesi = 1 AND kapanma_tarihi IS NULL");
-                ?>
-                <span class="count"><?php echo $urgent_count ?? '0'; ?></span>
+            <div class="stat-label">Tamamlanan Aksiyonlar</div>
+            <div class="stat-trend trend-up">
+                <i class="fas fa-arrow-up"></i>
+                8% artış
             </div>
         </div>
 
-        <div class="summary-card">
-            <div class="card-icon my-tasks">
-                <span class="dashicons dashicons-businessman"></span>
+        <div class="stat-card stat-urgent">
+            <div class="stat-icon">
+                <i class="fas fa-exclamation-triangle fa-lg"></i>
             </div>
-            <div class="card-content">
-                <h3>Benim Aksiyonlarım</h3>
-                <?php
-                $my_tasks = $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM {$wpdb->prefix}bkm_aksiyonlar WHERE FIND_IN_SET(%d, sorumlular) AND kapanma_tarihi IS NULL",
-                    $current_user->ID
-                ));
-                ?>
-                <span class="count"><?php echo $my_tasks ?? '0'; ?></span>
+            <div class="stat-value" data-value="<?php echo $urgent_count; ?>">
+                <?php echo $urgent_count; ?>
+            </div>
+            <div class="stat-label">Acil Aksiyonlar</div>
+            <div class="stat-trend trend-down">
+                <i class="fas fa-arrow-down"></i>
+                5% azalış
             </div>
         </div>
-    </div>
 
-    <!-- Filtreler -->
-    <div class="bkm-filters">
-        <div class="filter-group">
-            <select id="kategori-filter">
-                <option value="">Tüm Kategoriler</option>
-                <?php
-                $kategoriler = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}bkm_kategoriler ORDER BY kategori_adi ASC");
-                foreach ($kategoriler as $kategori) {
-                    echo '<option value="' . esc_attr($kategori->id) . '">' . esc_html($kategori->kategori_adi) . '</option>';
-                }
-                ?>
-            </select>
-
-            <select id="onem-filter">
-                <option value="">Tüm Önem Dereceleri</option>
-                <option value="1">Yüksek</option>
-                <option value="2">Orta</option>
-                <option value="3">Düşük</option>
-            </select>
-
-            <select id="durum-filter">
-                <option value="">Tüm Durumlar</option>
-                <option value="aktif">Aktif</option>
-                <option value="tamamlandi">Tamamlandı</option>
-            </select>
+        <div class="stat-card stat-mytasks">
+            <div class="stat-icon">
+                <i class="fas fa-user-clock fa-lg"></i>
+            </div>
+            <div class="stat-value" data-value="<?php echo $my_tasks; ?>">
+                <?php echo $my_tasks; ?>
+            </div>
+            <div class="stat-label">Benim Aksiyonlarım</div>
+            <div class="stat-trend trend-neutral">
+                <i class="fas fa-minus"></i>
+                Değişim yok
+            </div>
         </div>
     </div>
 
-    <!-- Ana Tablo -->
-    <div class="card mt-4">
-        <div class="card-body">
-            <table id="aksiyonlar-table" class="table table-striped table-bordered">
-                <thead>
-                    <tr>
-                        <th width="5%">ID</th>
-                        <th width="10%">Tanımlayan</th>
-                        <th width="8%">Önem</th>
-                        <th width="10%">Açılma Tarihi</th>
-                        <th width="12%">Kategori</th>
-                        <th width="15%">Sorumlular</th>
-                        <th width="10%">Hedef Tarih</th>
-                        <th width="10%">İlerleme</th>
-                        <th width="10%">Durum</th>
-                        <th width="10%">İşlemler</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php
-                    $aksiyonlar = $wpdb->get_results("
-                        SELECT a.*, k.kategori_adi 
-                        FROM {$wpdb->prefix}bkm_aksiyonlar a
-                        LEFT JOIN {$wpdb->prefix}bkm_kategoriler k ON a.kategori_id = k.id
-                        ORDER BY a.id DESC
-                    ");
-
-                    foreach ($aksiyonlar as $aksiyon) {
-                        // Önem derecesi sınıfı
-                        $onem_class = '';
-                        $onem_text = '';
-                        switch ($aksiyon->onem_derecesi) {
-                            case 1:
-                                $onem_class = 'badge-danger';
-                                $onem_text = 'Yüksek';
-                                break;
-                            case 2:
-                                $onem_class = 'badge-warning';
-                                $onem_text = 'Orta';
-                                break;
-                            case 3:
-                                $onem_class = 'badge-info';
-                                $onem_text = 'Düşük';
-                                break;
-                        }
-
-                        // Sorumlular listesi
-                        $sorumlular_array = explode(',', $aksiyon->sorumlular);
-                        $sorumlular_html = '';
-                        foreach ($sorumlular_array as $sorumlu_id) {
-                            $user_data = get_userdata($sorumlu_id);
-                            if ($user_data) {
-                                $sorumlular_html .= '<span class="user-badge">' . esc_html($user_data->display_name) . '</span>';
-                            }
-                        }
-
-                        echo '<tr>';
-                        echo '<td>' . esc_html($aksiyon->id) . '</td>';
-                        echo '<td>' . esc_html(get_userdata($aksiyon->tanimlayan_id)->display_name) . '</td>';
-                        echo '<td><span class="badge ' . $onem_class . '">' . $onem_text . '</span></td>';
-                        echo '<td>' . esc_html(date('d.m.Y', strtotime($aksiyon->acilma_tarihi))) . '</td>';
-                        echo '<td>' . esc_html($aksiyon->kategori_adi) . '</td>';
-                        echo '<td>' . $sorumlular_html . '</td>';
-                        echo '<td>' . esc_html(date('d.m.Y', strtotime($aksiyon->hedef_tarih))) . '</td>';
-                        echo '<td>
-                                <div class="progress">
-                                    <div class="progress-bar" role="progressbar" 
-                                         style="width: ' . esc_attr($aksiyon->ilerleme_durumu) . '%" 
-                                         aria-valuenow="' . esc_attr($aksiyon->ilerleme_durumu) . '" 
-                                         aria-valuemin="0" 
-                                         aria-valuemax="100">' . 
-                                    esc_html($aksiyon->ilerleme_durumu) . '%</div>
-                                </div>
-                              </td>';
-                        
-                        $durum_class = $aksiyon->kapanma_tarihi ? 'badge-success' : 'badge-primary';
-                        $durum_text = $aksiyon->kapanma_tarihi ? 'Tamamlandı' : 'Devam Ediyor';
-                        echo '<td><span class="badge ' . $durum_class . '">' . $durum_text . '</span></td>';
-                        
-                        echo '<td>
-                                <div class="btn-group">
-                                    <a href="' . admin_url('admin.php?page=bkm-aksiyon-ekle&action=edit&id=' . $aksiyon->id) . '" 
-                                       class="button button-small">
-                                       <span class="dashicons dashicons-edit"></span>
-                                    </a>
-                                    <button type="button" 
-                                            class="button button-small delete-aksiyon" 
-                                            data-id="' . $aksiyon->id . '">
-                                            <span class="dashicons dashicons-trash"></span>
-                                    </button>
-                                </div>
-                              </td>';
-                        echo '</tr>';
-                    }
-                    ?>
-                </tbody>
-            </table>
+    <!-- Filters -->
+<div class="view-options">
+    <button class="view-btn active" data-view="table">
+        <i class="fas fa-table"></i>
+        Tablo Görünümü
+    </button>
+        <div class="header-actions">
+            <button class="bkm-btn btn-primary" id="new-action-btn">
+                <i class="fas fa-plus"></i>
+                Yeni Aksiyon
+            </button>
+            <button class="bkm-btn btn-secondary" id="export-btn">
+                <i class="fas fa-download"></i>
+                Rapor İndir
+            </button>
         </div>
+    </div>
+    <div class="filter-section">
+        <div class="filter-container">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="Aksiyonlarda ara...">
+            </div>
+            <div class="filter-group">
+                <select class="bkm-select" id="kategori-filter">
+                    <option value="">Tüm Kategoriler</option>
+                    <?php foreach ($kategoriler as $kategori): ?>
+                        <option value="<?php echo esc_attr($kategori->id); ?>">
+                            <?php echo esc_html($kategori->kategori_adi); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <select class="bkm-select" id="onem-filter">
+                    <option value="">Önem Derecesi</option>
+                    <option value="1">Yüksek</option>
+                    <option value="2">Orta</option>
+                    <option value="3">Düşük</option>
+                </select>
+                <select class="bkm-select" id="durum-filter">
+                    <option value="">Durum</option>
+                    <option value="aktif">Devam Eden</option>
+                    <option value="tamamlandi">Tamamlanan</option>
+                </select>
+                <button class="bkm-btn btn-secondary" id="clear-filters">
+                    <i class="fas fa-undo"></i>
+                    Filtreleri Temizle
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-container">
+        <table class="bkm-table" id="aksiyonlar-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Başlık</th>
+                    <th>Önem</th>
+                    <th>Kategori</th>
+                    <th>Sorumlular</th>
+                    <th>Hedef Tarih</th>
+                    <th>İlerleme</th>
+                    <th>Durum</th>
+                    <th>İşlemler</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Tablo içeriği dinamik olarak doldurulacak -->
+            </tbody>
+        </table>
     </div>
 </div>
+<div class="bkm-container">
+    <!-- Header -->
+<!-- Üst kısma eklenecek -->
+<div class="header-stats">
+    <div class="quick-stat">
+        <i class="fas fa-chart-line"></i>
+        <span>Bu ay: 45 yeni aksiyon</span>
+    </div>
+    <div class="quick-stat">
+        <i class="fas fa-clock"></i>
+        <span>Ortalama tamamlanma: 5 gün</span>
+    </div>
+</div>
+
