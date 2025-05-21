@@ -20,6 +20,7 @@ class BKM_Aksiyon_Activator {
             performans_id bigint(20) NOT NULL,
             ilerleme_durumu int(3) NOT NULL DEFAULT 0,
             notlar text,
+            sorumlular text,
             created_at datetime NOT NULL,
             updated_at datetime NOT NULL,
             PRIMARY KEY (id)
@@ -64,5 +65,55 @@ class BKM_Aksiyon_Activator {
         dbDelta($sql_gorevler);
         dbDelta($sql_kategoriler);
         dbDelta($sql_performanslar);
+
+        // Örnek verileri ekle
+        self::add_default_data();
+    }
+
+    public static function add_default_data() {
+        global $wpdb;
+        
+        // Kategoriler için örnek veriler
+        $kategoriler = array(
+            'Yazılım Geliştirme',
+            'Sistem Yönetimi',
+            'Güvenlik',
+            'Veritabanı',
+            'Network',
+            'Destek'
+        );
+
+        $kategori_table = $wpdb->prefix . 'bkm_kategoriler';
+        foreach ($kategoriler as $kategori) {
+            $wpdb->insert(
+                $kategori_table,
+                array(
+                    'kategori_adi' => $kategori,
+                    'created_at' => current_time('mysql')
+                ),
+                array('%s', '%s')
+            );
+        }
+
+        // Performanslar için örnek veriler
+        $performanslar = array(
+            'Çok İyi',
+            'İyi',
+            'Orta',
+            'Düşük',
+            'Çok Düşük'
+        );
+
+        $performans_table = $wpdb->prefix . 'bkm_performanslar';
+        foreach ($performanslar as $performans) {
+            $wpdb->insert(
+                $performans_table,
+                array(
+                    'performans_adi' => $performans,
+                    'created_at' => current_time('mysql')
+                ),
+                array('%s', '%s')
+            );
+        }
     }
 }
