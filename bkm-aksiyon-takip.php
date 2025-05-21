@@ -428,7 +428,7 @@ class BKM_Aksiyon_Takip {
     }
 
     public function render_main_page() {
-        require_once BKM_AKSIYON_PLUGIN_DIR . 'admin/partials/main.php';
+        require_once BKM_AKSIYON_PLUGIN_DIR . 'admin/partials/aksiyon-listele.php';
     }
 
     public function render_new_page() {
@@ -445,7 +445,7 @@ class BKM_Aksiyon_Takip {
     }
 
     public function render_ayarlar_page() {
-        require_once BKM_AKSIYON_PLUGIN_DIR . 'admin/partials/ayarlar.php';
+        require_once BKM_AKSIYON_PLUGIN_DIR . 'admin/partials/raporlar.php';
     }
 
     // AJAX Handlers
