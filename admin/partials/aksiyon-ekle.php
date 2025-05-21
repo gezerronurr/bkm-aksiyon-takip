@@ -5,7 +5,7 @@ if (!defined('ABSPATH')) {
 
 global $wpdb;
 $current_user_id = get_current_user_id();
-$current_date = '2025-05-21 08:13:20'; // UTC zaman bilgisi
+$current_date = '2025-05-21 08:37:10'; // UTC zaman bilgisi
 $current_user_login = 'gezerronurr';
 
 // Yetki kontrolü

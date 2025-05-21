@@ -1,18 +1,25 @@
 jQuery(document).ready(function($) {
-    const currentDate = '2025-05-21 08:10:37'; // UTC zaman bilgisi
+    const currentDate = '2025-05-21 08:35:08'; // UTC zaman bilgisi
     const currentUserLogin = 'gezerronurr';
 
-    // Select2 başlatma
-    $('.select2').select2({
-        width: '100%',
-        placeholder: 'Seçiniz...',
-        allowClear: true,
-        language: {
-            noResults: function() {
-                return 'Sonuç bulunamadı';
+    // Select2 başlatma - güncellendi
+    initializeSelect2();
+    
+    function initializeSelect2() {
+        $('.select2').select2({
+            width: '100%',
+            placeholder: 'Seçiniz...',
+            allowClear: true,
+            language: {
+                noResults: function() {
+                    return 'Sonuç bulunamadı';
+                }
             }
-        }
-    });
+        }).on('select2:select', function(e) {
+            // Select2 seçim sonrası tetikleyici
+            $(this).trigger('change');
+        });
+    }
 
     // DatePicker başlatma
     $('.datepicker').flatpickr({
@@ -26,27 +33,29 @@ jQuery(document).ready(function($) {
     // Önem derecesi seçimi değiştiğinde görsel güncelleme
     $('#onem_derecesi').on('change', function() {
         const value = $(this).val();
-        const badge = $(this).closest('.form-group').find('.onem-badge');
+        let badge = $(this).siblings('.onem-badge');
         
         if (badge.length === 0) {
             $(this).after('<span class="onem-badge"></span>');
+            badge = $(this).siblings('.onem-badge');
         }
         
-        const newBadge = $(this).closest('.form-group').find('.onem-badge');
-        newBadge.removeClass('high medium low').empty();
+        badge.removeClass('high medium low').empty();
         
-        switch(value) {
-            case '1':
-                newBadge.addClass('high').html('<i class="fas fa-exclamation-circle"></i> Yüksek');
-                break;
-            case '2':
-                newBadge.addClass('medium').html('<i class="fas fa-exclamation"></i> Orta');
-                break;
-            case '3':
-                newBadge.addClass('low').html('<i class="fas fa-info-circle"></i> Düşük');
-                break;
+        if (value) {
+            switch(value) {
+                case '1':
+                    badge.addClass('high').html('<i class="fas fa-exclamation-circle"></i> Yüksek');
+                    break;
+                case '2':
+                    badge.addClass('medium').html('<i class="fas fa-exclamation"></i> Orta');
+                    break;
+                case '3':
+                    badge.addClass('low').html('<i class="fas fa-info-circle"></i> Düşük');
+                    break;
+            }
         }
-    });
+    }).trigger('change'); // Sayfa yüklendiğinde mevcut seçimi göster
 
     // Form gönderimi
     $('#bkm-aksiyon-form').on('submit', function(e) {
@@ -224,6 +233,33 @@ jQuery(document).ready(function($) {
         });
     }
 
+    // İlerleme çubuğu kontrolü - güncellendi
+    function initializeProgressBar() {
+        const progressSlider = $('#ilerleme_durumu');
+        const progressBar = progressSlider.closest('.progress-input-container').find('.progress-bar');
+        const progressValue = progressSlider.closest('.progress-input-container').find('.progress-value');
+
+        progressSlider.on('input change', function() {
+            const value = $(this).val();
+            progressBar.css('width', value + '%');
+            progressValue.text(value + '%');
+
+            // İlerleme 100% olduğunda kapanma tarihini otomatik ayarla
+            if (parseInt(value) === 100) {
+                $('#kapanma_tarihi').val(currentDate.split(' ')[0]).trigger('change');
+                showNotification('success', 'Aksiyon tamamlandı, kapanma tarihi otomatik ayarlandı');
+            }
+        });
+
+        // Başlangıç değerini ayarla
+        const initialValue = progressSlider.val();
+        progressBar.css('width', initialValue + '%');
+        progressValue.text(initialValue + '%');
+    }
+
+    // İlerleme çubuğunu başlat
+    initializeProgressBar();
+
     // Hafta numarası otomatik hesaplama
     $('#acilma_tarihi').on('change', function() {
         const date = new Date($(this).val());
@@ -237,22 +273,13 @@ jQuery(document).ready(function($) {
         return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
     }
 
-    // İlerleme durumu değiştiğinde kapanma tarihini otomatik ayarla
-    $('#ilerleme_durumu').on('change', function() {
-        const value = parseInt($(this).val());
-        if (value === 100) {
-            $('#kapanma_tarihi').val(currentDate.split(' ')[0]);
-            showNotification('success', 'Aksiyon tamamlandı, kapanma tarihi otomatik ayarlandı');
-        }
-    });
-
     // Form temizleme
     $('.bkm-btn[type="reset"]').on('click', function() {
         $('.select2').val(null).trigger('change');
         $('.onem-badge').remove();
         $('.field-error').remove();
         $('.form-group').removeClass('has-error');
-        $('#ilerleme_durumu').val(0).trigger('input');
+        $('#ilerleme_durumu').val(0).trigger('change');
         showNotification('info', 'Form temizlendi');
     });
 
@@ -291,6 +318,9 @@ jQuery(document).ready(function($) {
     // Sayfa yüklendiğinde otomatik kaydetmeyi başlat
     setupAutoSave();
 
+    // Form başlangıç durumunu kaydet
+    $('#bkm-aksiyon-form').data('original-state', $('#bkm-aksiyon-form').serialize());
+
     // Sayfa kapatılmadan önce uyarı
     $(window).on('beforeunload', function() {
         const form = $('#bkm-aksiyon-form');
@@ -299,81 +329,6 @@ jQuery(document).ready(function($) {
         }
     });
 
-    // Form başlangıç durumunu kaydet
-    $('#bkm-aksiyon-form').data('original-state', $('#bkm-aksiyon-form').serialize());
-
-    // Modal işlemleri
-    $('.bkm-modal-trigger').on('click', function(e) {
-        e.preventDefault();
-        const modalId = $(this).data('modal');
-        $(`#${modalId}`).fadeIn(200);
-    });
-
-    $('.bkm-modal-close, .bkm-modal-cancel').on('click', function() {
-        $(this).closest('.bkm-modal').fadeOut(200);
-    });
-
-    $(window).on('click', function(e) {
-        if ($(e.target).hasClass('bkm-modal')) {
-            $('.bkm-modal').fadeOut(200);
-        }
-    });
-
-    // Kullanıcı tercihleri
-    function saveUserPreferences() {
-        const preferences = {
-            defaultCategory: $('#kategori_id').val(),
-            defaultImportance: $('#onem_derecesi').val(),
-            autoSave: true
-        };
-
-        $.ajax({
-            url: bkm_admin.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'save_user_preferences',
-                nonce: bkm_admin.nonce,
-                preferences: preferences
-            }
-        });
-    }
-
-    // Kullanıcı tercihlerini yükle
-    function loadUserPreferences() {
-        $.ajax({
-            url: bkm_admin.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'load_user_preferences',
-                nonce: bkm_admin.nonce
-            },
-            success: function(response) {
-                if (response.success && response.data.preferences) {
-                    const prefs = response.data.preferences;
-                    if (prefs.defaultCategory) {
-                        $('#kategori_id').val(prefs.defaultCategory).trigger('change');
-                    }
-                    if (prefs.defaultImportance) {
-                        $('#onem_derecesi').val(prefs.defaultImportance).trigger('change');
-                    }
-                }
-            }
-        });
-    }
-
-    // Sayfa yüklendiğinde kullanıcı tercihlerini yükle
-    loadUserPreferences();
-
-    // Form alanlarında değişiklik olduğunda tercihleri kaydet
-    $('#kategori_id, #onem_derecesi').on('change', function() {
-        saveUserPreferences();
-    });
-
-    // Performans değişikliği izleme
-    $('#performans_id').on('change', function() {
-        const selectedPerformans = $(this).val();
-        if (selectedPerformans) {
-            logAction('performans_change', selectedPerformans);
-        }
-    });
+    // Sayfa yüklendiğinde mevcut seçimleri göster
+    $('#onem_derecesi, #ilerleme_durumu').trigger('change');
 });

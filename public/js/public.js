@@ -1,5 +1,5 @@
 jQuery(document).ready(function($) {
-    const currentDate = '2025-05-21 08:19:27'; // UTC zaman bilgisi
+    const currentDate = '2025-05-21 08:41:43'; // UTC zaman bilgisi
     const currentUserLogin = 'gezerronurr';
 
     // Select2 başlatma
@@ -24,63 +24,36 @@ jQuery(document).ready(function($) {
     });
 
     // İlerleme çubuğu kontrolü
-    $('#ilerleme_durumu').on('input', function() {
-        const value = $(this).val();
-        $(this).closest('.progress-input-container')
-            .find('.progress-bar')
-            .css('width', value + '%');
-        $(this).closest('.progress-input-container')
-            .find('.progress-value')
-            .text(value + '%');
-    }).trigger('input');
-
-    // İlerleme çubuğu değeri değiştiğinde sunucuya gönderme
-    $('#ilerleme_durumu').on('change', function() {
-        const value = $(this).val();
-        const aksiyonId = $(this).closest('form').data('id');
+    function initializeProgressBar() {
+        const progressSlider = $('.progress-slider');
         
-        if (!aksiyonId) return; // Yeni kayıtlarda gönderme yapma
+        progressSlider.each(function() {
+            const slider = $(this);
+            const container = slider.closest('.progress-input-container');
+            const progressBar = container.find('.progress-bar');
+            const progressValue = container.find('.progress-value');
 
-        $.ajax({
-            url: bkm_ajax.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'update_aksiyon_ilerleme',
-                nonce: bkm_ajax.nonce,
-                aksiyon_id: aksiyonId,
-                ilerleme_durumu: value
-            },
-            success: function(response) {
-                if (response.success) {
-                    showNotification('success', 'İlerleme durumu güncellendi');
-                    updateAksiyonRow(aksiyonId);
-                } else {
-                    showNotification('error', response.data.message);
-                }
-            },
-            error: function() {
-                showNotification('error', 'Bir hata oluştu');
-            }
-        });
-    });
+            slider.on('input change', function() {
+                const value = $(this).val();
+                progressBar.css('width', value + '%');
+                progressValue.text(value + '%');
 
-    // Aksiyon satırını güncelle
-    function updateAksiyonRow(aksiyonId) {
-        $.ajax({
-            url: bkm_ajax.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'get_aksiyon_row',
-                nonce: bkm_ajax.nonce,
-                aksiyon_id: aksiyonId
-            },
-            success: function(response) {
-                if (response.success) {
-                    $(`tr[data-id="${aksiyonId}"]`).replaceWith(response.data.html);
+                // İlerleme 100% olduğunda kapanma tarihini otomatik ayarla
+                if (parseInt(value) === 100) {
+                    $('#kapanma_tarihi').val(currentDate.split(' ')[0]).trigger('change');
+                    showNotification('success', 'Aksiyon tamamlandı, kapanma tarihi otomatik ayarlandı');
                 }
-            }
+            });
+
+            // Başlangıç değerini ayarla
+            const initialValue = slider.val();
+            progressBar.css('width', initialValue + '%');
+            progressValue.text(initialValue + '%');
         });
     }
+
+    // İlerleme çubuğunu başlat
+    initializeProgressBar();
 
     // Aksiyon detay modalını aç
     $(document).on('click', '.aksiyon-detay-btn', function(e) {
@@ -301,6 +274,9 @@ jQuery(document).ready(function($) {
             locale: "tr",
             allowInput: true
         });
+
+        // Modal içindeki ilerleme çubuğu
+        initializeProgressBar();
     }
 
     // Bildirim gösterici
@@ -396,4 +372,89 @@ jQuery(document).ready(function($) {
     $(document).on('click keypress', function() {
         setupAutoRefresh();
     });
+// Aksiyon durumunu güncelle
+    function updateAksiyonStatus(aksiyonId, status) {
+        $.ajax({
+            url: bkm_ajax.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'update_aksiyon_status',
+                nonce: bkm_ajax.nonce,
+                aksiyon_id: aksiyonId,
+                status: status
+            },
+            beforeSend: function() {
+                showLoader();
+            },
+            success: function(response) {
+                if (response.success) {
+                    showNotification('success', 'Aksiyon durumu güncellendi');
+                    updateAksiyonRow(aksiyonId);
+                } else {
+                    showNotification('error', response.data.message);
+                }
+            },
+            error: function() {
+                showNotification('error', 'Durum güncellenirken bir hata oluştu');
+            },
+            complete: function() {
+                hideLoader();
+            }
+        });
+    }
+
+    // Aksiyon satırını güncelle
+    function updateAksiyonRow(aksiyonId) {
+        $.ajax({
+            url: bkm_ajax.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_aksiyon_row',
+                nonce: bkm_ajax.nonce,
+                aksiyon_id: aksiyonId
+            },
+            success: function(response) {
+                if (response.success) {
+                    $(`tr[data-id="${aksiyonId}"]`).replaceWith(response.data.html);
+                    initializeRowComponents($(`tr[data-id="${aksiyonId}"]`));
+                }
+            }
+        });
+    }
+
+    // Satır bileşenlerini başlat
+    function initializeRowComponents(row) {
+        row.find('.select2').select2();
+        row.find('.datepicker').flatpickr({
+            dateFormat: "Y-m-d",
+            locale: "tr",
+            allowInput: true
+        });
+        row.find('.progress-slider').each(function() {
+            initializeProgressBar($(this));
+        });
+    }
+
+    // Tüm bileşenleri yeniden başlat
+    function reinitializeComponents() {
+        $('.select2').select2({
+            width: '100%',
+            placeholder: 'Seçiniz...',
+            allowClear: true,
+            language: {
+                noResults: function() {
+                    return 'Sonuç bulunamadı';
+                }
+            }
+        });
+
+        $('.datepicker').flatpickr({
+            dateFormat: "Y-m-d",
+            locale: "tr",
+            allowInput: true,
+            minDate: "today"
+        });
+
+        initializeProgressBar();
+    }
 });
