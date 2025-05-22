@@ -65,6 +65,13 @@ class BKM_Aksiyon_Takip {
         add_action('wp_ajax_save_performans', [$this, 'handle_save_performans']);
         add_action('wp_ajax_delete_performans', [$this, 'handle_delete_performans']);
         add_action('wp_ajax_load_performanslar', [$this, 'handle_load_performanslar']);
+        
+        // Görev AJAX handlers
+        add_action('wp_ajax_save_gorev', [$this, 'handle_save_gorev']);
+        add_action('wp_ajax_delete_gorev', [$this, 'handle_delete_gorev']);
+        add_action('wp_ajax_load_gorevler', [$this, 'handle_load_gorevler']);
+        add_action('wp_ajax_complete_gorev', [$this, 'handle_complete_gorev']);
+        add_action('wp_ajax_load_gorev_detay', [$this, 'handle_load_gorev_detay']);
     }
     public function add_admin_menu() {
         // Ana menü
@@ -508,7 +515,8 @@ class BKM_Aksiyon_Takip {
 
         wp_send_json_success([
             'message' => __('Aksiyon başarıyla kaydedildi', 'bkm-aksiyon-takip'),
-            'aksiyon_id' => $aksiyon_id
+            'aksiyon_id' => $aksiyon_id,
+            'redirect_url' => admin_url('admin.php?page=bkm-aksiyon-takip')
         ]);
     }
     public function handle_delete_aksiyon() {
@@ -867,6 +875,325 @@ class BKM_Aksiyon_Takip {
             $data,
             ['%d', '%d', '%s', '%s', '%s']
         );
+    }
+
+    public function handle_save_gorev() {
+        check_ajax_referer('bkm_aksiyon_takipx_nonce', 'gorev_nonce');
+
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => __('Yetkiniz yok', 'bkm-aksiyon-takip')]);
+        }
+
+        global $wpdb;
+
+        $gorev_id = isset($_POST['gorev_id']) ? intval($_POST['gorev_id']) : 0;
+        $aksiyon_id = isset($_POST['aksiyon_id']) ? intval($_POST['aksiyon_id']) : 0;
+        
+        if ($aksiyon_id <= 0) {
+            wp_send_json_error(['message' => __('Geçersiz aksiyon ID', 'bkm-aksiyon-takip')]);
+        }
+
+        $data = [
+            'aksiyon_id' => $aksiyon_id,
+            'icerik' => sanitize_textarea_field($_POST['gorev_icerik']),
+            'baslangic_tarihi' => sanitize_text_field($_POST['baslangic_tarihi']),
+            'sorumlu_id' => intval($_POST['sorumlu_id']),
+            'hedef_bitis_tarihi' => sanitize_text_field($_POST['hedef_bitis_tarihi']),
+            'ilerleme_durumu' => intval($_POST['ilerleme_durumu']),
+            'updated_at' => current_time('mysql')
+        ];
+
+        if ($gorev_id > 0) {
+            // Mevcut görevi güncelle
+            $result = $wpdb->update(
+                "{$wpdb->prefix}bkm_gorevler",
+                $data,
+                ['id' => $gorev_id],
+                array_fill(0, count($data), '%s'),
+                ['%d']
+            );
+        } else {
+            // Yeni görev ekle
+            $data['created_at'] = current_time('mysql');
+            
+            $result = $wpdb->insert(
+                "{$wpdb->prefix}bkm_gorevler",
+                $data,
+                array_fill(0, count($data), '%s')
+            );
+            $gorev_id = $wpdb->insert_id;
+        }
+
+        if ($result === false) {
+            wp_send_json_error(['message' => __('Veritabanı hatası oluştu', 'bkm-aksiyon-takip')]);
+        }
+
+        // Görev sahibine email gönder
+        $this->send_gorev_notification_email($gorev_id, $gorev_id > 0 ? 'update' : 'create');
+
+        wp_send_json_success([
+            'message' => __('Görev başarıyla kaydedildi', 'bkm-aksiyon-takip'),
+            'gorev_id' => $gorev_id
+        ]);
+    }
+
+    public function handle_delete_gorev() {
+        check_ajax_referer('bkm_aksiyon_takipx_nonce', 'nonce');
+
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => __('Yetkiniz yok', 'bkm-aksiyon-takip')]);
+        }
+
+        global $wpdb;
+
+        $gorev_id = intval($_POST['gorev_id']);
+
+        $result = $wpdb->delete(
+            "{$wpdb->prefix}bkm_gorevler",
+            ['id' => $gorev_id],
+            ['%d']
+        );
+
+        if ($result === false) {
+            wp_send_json_error(['message' => __('Veritabanı hatası oluştu', 'bkm-aksiyon-takip')]);
+        }
+
+        wp_send_json_success(['message' => __('Görev başarıyla silindi', 'bkm-aksiyon-takip')]);
+    }
+
+    public function handle_load_gorevler() {
+        check_ajax_referer('bkm_aksiyon_takipx_nonce', 'nonce');
+
+        if (!is_user_logged_in()) {
+            wp_send_json_error(['message' => __('Giriş yapmalısınız', 'bkm-aksiyon-takip')]);
+        }
+
+        global $wpdb;
+
+        $aksiyon_id = intval($_POST['aksiyon_id']);
+        
+        if ($aksiyon_id <= 0) {
+            wp_send_json_error(['message' => __('Geçersiz aksiyon ID', 'bkm-aksiyon-takip')]);
+        }
+
+        $gorevler = $wpdb->get_results($wpdb->prepare("
+            SELECT g.*, u.display_name as sorumlu_adi
+            FROM {$wpdb->prefix}bkm_gorevler g
+            LEFT JOIN {$wpdb->users} u ON g.sorumlu_id = u.ID
+            WHERE g.aksiyon_id = %d
+            ORDER BY g.created_at DESC
+        ", $aksiyon_id));
+
+        ob_start();
+        if ($gorevler && count($gorevler) > 0) {
+            echo '<div class="bkm-gorevler-container">';
+            echo '<table class="bkm-table gorevler-table">';
+            echo '<thead>';
+            echo '<tr>';
+            echo '<th>' . __('Görev İçeriği', 'bkm-aksiyon-takip') . '</th>';
+            echo '<th>' . __('Başlangıç', 'bkm-aksiyon-takip') . '</th>';
+            echo '<th>' . __('Sorumlu', 'bkm-aksiyon-takip') . '</th>';
+            echo '<th>' . __('Hedef Bitiş', 'bkm-aksiyon-takip') . '</th>';
+            echo '<th>' . __('İlerleme', 'bkm-aksiyon-takip') . '</th>';
+            echo '<th>' . __('Gerçek Bitiş', 'bkm-aksiyon-takip') . '</th>';
+            echo '<th>' . __('İşlemler', 'bkm-aksiyon-takip') . '</th>';
+            echo '</tr>';
+            echo '</thead>';
+            echo '<tbody>';
+            
+            foreach ($gorevler as $gorev) {
+                $is_completed = $gorev->ilerleme_durumu >= 100;
+                $is_delayed = !$is_completed && strtotime($gorev->hedef_bitis_tarihi) < time();
+                $is_owner = $gorev->sorumlu_id == get_current_user_id();
+                $can_edit = current_user_can('edit_posts') || $is_owner;
+                
+                $row_class = $is_completed ? 'completed-row' : ($is_delayed ? 'delayed-row' : '');
+                
+                echo '<tr class="' . $row_class . '" data-id="' . $gorev->id . '">';
+                echo '<td>' . esc_html($gorev->icerik) . '</td>';
+                echo '<td>' . date_i18n(get_option('date_format'), strtotime($gorev->baslangic_tarihi)) . '</td>';
+                echo '<td>' . esc_html($gorev->sorumlu_adi) . '</td>';
+                echo '<td>' . date_i18n(get_option('date_format'), strtotime($gorev->hedef_bitis_tarihi)) . '</td>';
+                
+                echo '<td>';
+                echo '<div class="progress-bar-container">';
+                echo '<div class="progress-bar" style="width: ' . $gorev->ilerleme_durumu . '%"></div>';
+                echo '<span class="progress-text">' . $gorev->ilerleme_durumu . '%</span>';
+                echo '</div>';
+                echo '</td>';
+                
+                echo '<td>' . ($gorev->gercek_bitis_tarihi ? date_i18n(get_option('date_format'), strtotime($gorev->gercek_bitis_tarihi)) : '-') . '</td>';
+                
+                echo '<td class="actions">';
+                if ($can_edit && !$is_completed) {
+                    echo '<button class="bkm-btn small edit-gorev-btn" data-id="' . $gorev->id . '" title="' . __('Düzenle', 'bkm-aksiyon-takip') . '"><i class="fas fa-edit"></i></button>';
+                    echo '<button class="bkm-btn small success complete-gorev-btn" data-id="' . $gorev->id . '" title="' . __('Tamamla', 'bkm-aksiyon-takip') . '"><i class="fas fa-check"></i></button>';
+                }
+                if (current_user_can('edit_posts')) {
+                    echo '<button class="bkm-btn small danger delete-gorev-btn" data-id="' . $gorev->id . '" title="' . __('Sil', 'bkm-aksiyon-takip') . '"><i class="fas fa-trash"></i></button>';
+                }
+                echo '</td>';
+                
+                echo '</tr>';
+            }
+            
+            echo '</tbody>';
+            echo '</table>';
+            echo '</div>';
+        } else {
+            echo '<div class="bkm-no-results">';
+            echo '<p>' . __('Bu aksiyona ait görev bulunamadı.', 'bkm-aksiyon-takip') . '</p>';
+            echo '</div>';
+        }
+        $html = ob_get_clean();
+
+        wp_send_json_success(['html' => $html]);
+    }
+
+    public function handle_complete_gorev() {
+        check_ajax_referer('bkm_aksiyon_takipx_nonce', 'nonce');
+
+        if (!is_user_logged_in()) {
+            wp_send_json_error(['message' => __('Giriş yapmalısınız', 'bkm-aksiyon-takip')]);
+        }
+
+        global $wpdb;
+
+        $gorev_id = intval($_POST['gorev_id']);
+        
+        // Görev bilgilerini al
+        $gorev = $wpdb->get_row($wpdb->prepare("
+            SELECT g.*, a.id as aksiyon_id, a.sorumlular
+            FROM {$wpdb->prefix}bkm_gorevler g
+            LEFT JOIN {$wpdb->prefix}bkm_aksiyonlar a ON g.aksiyon_id = a.id
+            WHERE g.id = %d
+        ", $gorev_id));
+        
+        if (!$gorev) {
+            wp_send_json_error(['message' => __('Görev bulunamadı', 'bkm-aksiyon-takip')]);
+        }
+        
+        // Yetki kontrolü
+        $current_user_id = get_current_user_id();
+        $can_complete = current_user_can('edit_posts') || $gorev->sorumlu_id == $current_user_id;
+        
+        if (!$can_complete) {
+            wp_send_json_error(['message' => __('Bu görevi tamamlamaya yetkiniz yok', 'bkm-aksiyon-takip')]);
+        }
+
+        // Görevi tamamla
+        $result = $wpdb->update(
+            "{$wpdb->prefix}bkm_gorevler",
+            [
+                'ilerleme_durumu' => 100,
+                'gercek_bitis_tarihi' => current_time('mysql'),
+                'updated_at' => current_time('mysql')
+            ],
+            ['id' => $gorev_id],
+            ['%d', '%s', '%s'],
+            ['%d']
+        );
+
+        if ($result === false) {
+            wp_send_json_error(['message' => __('Veritabanı hatası oluştu', 'bkm-aksiyon-takip')]);
+        }
+
+        // Email gönder
+        $this->send_gorev_notification_email($gorev_id, 'complete');
+
+        wp_send_json_success(['message' => __('Görev başarıyla tamamlandı', 'bkm-aksiyon-takip')]);
+    }
+
+    public function handle_load_gorev_detay() {
+        check_ajax_referer('bkm_aksiyon_takipx_nonce', 'nonce');
+
+        if (!is_user_logged_in()) {
+            wp_send_json_error(['message' => __('Giriş yapmalısınız', 'bkm-aksiyon-takip')]);
+        }
+
+        global $wpdb;
+
+        $gorev_id = intval($_POST['gorev_id']);
+        
+        $gorev = $wpdb->get_row($wpdb->prepare("
+            SELECT g.*, u.display_name as sorumlu_adi
+            FROM {$wpdb->prefix}bkm_gorevler g
+            LEFT JOIN {$wpdb->users} u ON g.sorumlu_id = u.ID
+            WHERE g.id = %d
+        ", $gorev_id));
+        
+        if (!$gorev) {
+            wp_send_json_error(['message' => __('Görev bulunamadı', 'bkm-aksiyon-takip')]);
+        }
+
+        wp_send_json_success($gorev);
+    }
+
+    private function send_gorev_notification_email($gorev_id, $action_type) {
+        global $wpdb;
+        
+        $gorev = $wpdb->get_row($wpdb->prepare("
+            SELECT g.*, u.display_name as sorumlu_adi, u.user_email as sorumlu_email,
+                   a.id as aksiyon_id, a.tespit_nedeni as aksiyon_konu
+            FROM {$wpdb->prefix}bkm_gorevler g
+            LEFT JOIN {$wpdb->users} u ON g.sorumlu_id = u.ID
+            LEFT JOIN {$wpdb->prefix}bkm_aksiyonlar a ON g.aksiyon_id = a.id
+            WHERE g.id = %d
+        ", $gorev_id));
+        
+        if (!$gorev || empty($gorev->sorumlu_email)) {
+            return false;
+        }
+        
+        $current_user = wp_get_current_user();
+        $site_name = get_bloginfo('name');
+        $subject = '';
+        $message = '';
+        
+        switch ($action_type) {
+            case 'create':
+                $subject = sprintf(__('[%s] Size Yeni Görev Atandı', 'bkm-aksiyon-takip'), $site_name);
+                $message = sprintf(
+                    __('Merhaba %s,<br><br>%s tarafından size yeni bir görev atandı.<br><br>Görev Detayları:<br>Görev İçeriği: %s<br>Başlangıç Tarihi: %s<br>Hedef Bitiş Tarihi: %s<br>İlgili Aksiyon: %s<br><br>Görevlerinizi görüntülemek için sisteme giriş yapabilirsiniz.<br><br>Bu e-posta otomatik olarak gönderilmiştir, lütfen yanıtlamayınız.', 'bkm-aksiyon-takip'),
+                    $gorev->sorumlu_adi,
+                    $current_user->display_name,
+                    $gorev->icerik,
+                    date_i18n(get_option('date_format'), strtotime($gorev->baslangic_tarihi)),
+                    date_i18n(get_option('date_format'), strtotime($gorev->hedef_bitis_tarihi)),
+                    $gorev->aksiyon_konu
+                );
+                break;
+                
+            case 'update':
+                $subject = sprintf(__('[%s] Görev Güncellendi', 'bkm-aksiyon-takip'), $site_name);
+                $message = sprintf(
+                    __('Merhaba %s,<br><br>%s tarafından göreviniz güncellendi.<br><br>Güncel Görev Detayları:<br>Görev İçeriği: %s<br>Başlangıç Tarihi: %s<br>Hedef Bitiş Tarihi: %s<br>İlgili Aksiyon: %s<br><br>Görevlerinizi görüntülemek için sisteme giriş yapabilirsiniz.<br><br>Bu e-posta otomatik olarak gönderilmiştir, lütfen yanıtlamayınız.', 'bkm-aksiyon-takip'),
+                    $gorev->sorumlu_adi,
+                    $current_user->display_name,
+                    $gorev->icerik,
+                    date_i18n(get_option('date_format'), strtotime($gorev->baslangic_tarihi)),
+                    date_i18n(get_option('date_format'), strtotime($gorev->hedef_bitis_tarihi)),
+                    $gorev->aksiyon_konu
+                );
+                break;
+                
+            case 'complete':
+                $subject = sprintf(__('[%s] Görev Tamamlandı', 'bkm-aksiyon-takip'), $site_name);
+                $message = sprintf(
+                    __('Merhaba %s,<br><br>Aşağıdaki göreviniz tamamlandı olarak işaretlendi.<br><br>Görev Detayları:<br>Görev İçeriği: %s<br>Başlangıç Tarihi: %s<br>Hedef Bitiş Tarihi: %s<br>Gerçek Bitiş Tarihi: %s<br>İlgili Aksiyon: %s<br><br>Görevlerinizi görüntülemek için sisteme giriş yapabilirsiniz.<br><br>Bu e-posta otomatik olarak gönderilmiştir, lütfen yanıtlamayınız.', 'bkm-aksiyon-takip'),
+                    $gorev->sorumlu_adi,
+                    $gorev->icerik,
+                    date_i18n(get_option('date_format'), strtotime($gorev->baslangic_tarihi)),
+                    date_i18n(get_option('date_format'), strtotime($gorev->hedef_bitis_tarihi)),
+                    date_i18n(get_option('date_format'), strtotime($gorev->gercek_bitis_tarihi)),
+                    $gorev->aksiyon_konu
+                );
+                break;
+        }
+        
+        $headers = ['Content-Type: text/html; charset=UTF-8'];
+        
+        return wp_mail($gorev->sorumlu_email, $subject, $message, $headers);
     }
 }
 

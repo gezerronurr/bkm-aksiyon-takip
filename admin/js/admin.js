@@ -1,6 +1,21 @@
 jQuery(document).ready(function($) {
     const currentDate = '2025-05-21 08:35:08'; // UTC zaman bilgisi
     const currentUserLogin = 'gezerronurr';
+    let formChanged = false; // Form değişikliği takibi için
+
+    // Form değişiklik izleme
+    $('#bkm-aksiyon-form').on('change', 'input, select, textarea', function() {
+        formChanged = true;
+    });
+
+    // Sayfadan çıkma uyarısı
+    $(window).on('beforeunload', function(e) {
+        if (formChanged) {
+            // Modern tarayıcılar için standart mesaj gösterilir
+            // Bu metin tarayıcılar tarafından genellikle göz ardı edilir
+            return 'Kaydedilmemiş değişiklikleriniz var. Sayfadan çıkmak istediğinize emin misiniz?';
+        }
+    });
 
     // Select2 başlatma - güncellendi
     initializeSelect2();
@@ -66,6 +81,10 @@ jQuery(document).ready(function($) {
             return false;
         }
 
+        // Sayfadan çıkma uyarısını kaldır
+        formChanged = false;
+        $(window).off('beforeunload');
+
         // Form verilerini topla
         const formData = new FormData(this);
         formData.append('action', 'save_aksiyon');
@@ -86,21 +105,33 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     showNotification('success', 'Aksiyon başarıyla kaydedildi');
                     logAction('create', response.data.aksiyon_id);
-                    setTimeout(() => {
+                    
+                    // Yönlendirme URL'sini kontrol et ve yönlendir
+                    if (response.data.redirect_url) {
                         window.location.href = response.data.redirect_url;
-                    }, 1500);
+                    } else {
+                        // Eğer URL yoksa varsayılan olarak tüm aksiyonlar sayfasına git
+                        window.location.href = 'admin.php?page=bkm-aksiyon-takip';
+                    }
                 } else {
                     showNotification('error', response.data.message);
                     logError('save_aksiyon', response.data.message);
+                    // Hata durumunda formu tekrar etkinleştir
+                    enableForm();
+                    // Hata durumunda uyarıyı tekrar etkinleştir
+                    formChanged = true;
                 }
             },
             error: function(xhr, status, error) {
                 showNotification('error', 'Bir hata oluştu: ' + error);
                 logError('save_aksiyon', error);
+                // Hata durumunda formu tekrar etkinleştir
+                enableForm();
+                // Hata durumunda uyarıyı tekrar etkinleştir
+                formChanged = true;
             },
             complete: function() {
                 hideLoader();
-                enableForm();
             }
         });
     });

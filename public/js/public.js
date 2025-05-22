@@ -372,7 +372,8 @@ jQuery(document).ready(function($) {
     $(document).on('click keypress', function() {
         setupAutoRefresh();
     });
-// Aksiyon durumunu güncelle
+
+    // Aksiyon durumunu güncelle
     function updateAksiyonStatus(aksiyonId, status) {
         $.ajax({
             url: bkm_ajax.ajax_url,
@@ -437,24 +438,294 @@ jQuery(document).ready(function($) {
 
     // Tüm bileşenleri yeniden başlat
     function reinitializeComponents() {
+        // Select2 yeniden başlat
         $('.select2').select2({
             width: '100%',
             placeholder: 'Seçiniz...',
-            allowClear: true,
-            language: {
-                noResults: function() {
-                    return 'Sonuç bulunamadı';
-                }
-            }
+            allowClear: true
         });
 
+        // DatePicker yeniden başlat
         $('.datepicker').flatpickr({
             dateFormat: "Y-m-d",
             locale: "tr",
-            allowInput: true,
-            minDate: "today"
+            allowInput: true
         });
 
+        // İlerleme çubuğu kontrolü başlat
         initializeProgressBar();
+    }
+
+    // GÖREV İŞLEMLERİ
+    
+    // Görev ekle butonuna tıklama
+    $(document).on('click', '.gorev-ekle-btn', function(e) {
+        e.preventDefault();
+        const aksiyonId = $(this).data('aksiyon-id');
+        
+        $('#gorev-ekle-form').trigger('reset');
+        $('#gorev_id').val('');
+        $('#aksiyon_id').val(aksiyonId);
+        $('#gorev-ekle-modal').fadeIn(200);
+        
+        // Form elemanlarını başlat
+        setTimeout(function() {
+            $('.select2').trigger('change');
+            reinitializeComponents();
+        }, 200);
+    });
+    
+    // Görev ekleme formunu gönderme
+    $('#gorev-ekle-form').on('submit', function(e) {
+        e.preventDefault();
+        
+        // Form validasyonu
+        if (!validateGorevForm()) {
+            return false;
+        }
+        
+        const formData = new FormData(this);
+        formData.append('action', 'save_gorev');
+        
+        $.ajax({
+            url: bkm_ajax_takipx.ajax_url,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            beforeSend: function() {
+                showLoader();
+            },
+            success: function(response) {
+                if (response.success) {
+                    showNotification('success', response.data.message);
+                    $('#gorev-ekle-modal').fadeOut(200);
+                    
+                    // Eğer görevler modali açıksa, görevleri yeniden yükle
+                    if ($('#gorevler-modal').is(':visible')) {
+                        loadGorevler($('#aksiyon_id').val());
+                    }
+                } else {
+                    showNotification('error', response.data.message);
+                }
+            },
+            error: function() {
+                showNotification('error', 'Görev kaydedilirken bir hata oluştu');
+            },
+            complete: function() {
+                hideLoader();
+            }
+        });
+    });
+    
+    // Görev formunu doğrula
+    function validateGorevForm() {
+        let isValid = true;
+        const requiredFields = $('#gorev-ekle-form').find('[required]');
+        
+        requiredFields.each(function() {
+            if (!$(this).val()) {
+                isValid = false;
+                $(this).addClass('error');
+                
+                // Select2 için özel işlem
+                if ($(this).hasClass('select2')) {
+                    $(this).next('.select2-container').addClass('error');
+                }
+            } else {
+                $(this).removeClass('error');
+                
+                // Select2 için özel işlem
+                if ($(this).hasClass('select2')) {
+                    $(this).next('.select2-container').removeClass('error');
+                }
+            }
+        });
+        
+        // Tarih validasyonları
+        const baslangicTarihi = new Date($('#baslangic_tarihi').val());
+        const hedefBitisTarihi = new Date($('#hedef_bitis_tarihi').val());
+        
+        if (hedefBitisTarihi < baslangicTarihi) {
+            isValid = false;
+            $('#hedef_bitis_tarihi').addClass('error');
+            showNotification('error', 'Hedef bitiş tarihi, başlangıç tarihinden önce olamaz');
+        }
+        
+        return isValid;
+    }
+    
+    // Görevleri yükle
+    function loadGorevler(aksiyonId) {
+        $.ajax({
+            url: bkm_ajax_takipx.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'load_gorevler',
+                nonce: bkm_ajax_takipx.nonce,
+                aksiyon_id: aksiyonId
+            },
+            beforeSend: function() {
+                $('#gorevler-modal .bkm-modal-body').html(
+                    '<div class="bkm-loader"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</div>'
+                );
+                $('#gorevler-modal').fadeIn(200);
+                
+                // Görev ekle butonuna aksiyon ID'si ekle
+                $('#gorevler-modal .gorev-ekle-btn').attr('data-aksiyon-id', aksiyonId);
+            },
+            success: function(response) {
+                if (response.success) {
+                    $('#gorevler-modal .bkm-modal-body').html(response.data.html);
+                } else {
+                    showNotification('error', response.data.message);
+                }
+            },
+            error: function() {
+                showNotification('error', 'Görevler yüklenirken bir hata oluştu');
+            }
+        });
+    }
+    
+    // Görev göster butonuna tıklama
+    $(document).on('click', '.show-gorevler-btn', function(e) {
+        e.preventDefault();
+        const aksiyonId = $(this).data('aksiyon-id');
+        loadGorevler(aksiyonId);
+    });
+    
+    // Görev düzenle butonuna tıklama
+    $(document).on('click', '.edit-gorev-btn', function(e) {
+        e.preventDefault();
+        const gorevId = $(this).data('id');
+        
+        $.ajax({
+            url: bkm_ajax_takipx.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'load_gorev_detay',
+                nonce: bkm_ajax_takipx.nonce,
+                gorev_id: gorevId
+            },
+            beforeSend: function() {
+                showLoader();
+            },
+            success: function(response) {
+                if (response.success) {
+                    const gorev = response.data;
+                    
+                    // Form verilerini doldur
+                    $('#gorev_id').val(gorev.id);
+                    $('#aksiyon_id').val(gorev.aksiyon_id);
+                    $('#gorev_icerik').val(gorev.icerik);
+                    $('#baslangic_tarihi').val(gorev.baslangic_tarihi.split(' ')[0]);
+                    $('#sorumlu_id').val(gorev.sorumlu_id).trigger('change');
+                    $('#hedef_bitis_tarihi').val(gorev.hedef_bitis_tarihi.split(' ')[0]);
+                    $('#gorev_ilerleme_durumu').val(gorev.ilerleme_durumu).trigger('change');
+                    
+                    // Modalı göster
+                    $('#gorev-ekle-modal').fadeIn(200);
+                    
+                    // Form elemanlarını başlat
+                    setTimeout(function() {
+                        reinitializeComponents();
+                    }, 200);
+                } else {
+                    showNotification('error', response.data.message);
+                }
+            },
+            error: function() {
+                showNotification('error', 'Görev detayı yüklenirken bir hata oluştu');
+            },
+            complete: function() {
+                hideLoader();
+            }
+        });
+    });
+    
+    // Görev tamamla butonuna tıklama
+    $(document).on('click', '.complete-gorev-btn', function(e) {
+        e.preventDefault();
+        const gorevId = $(this).data('id');
+        
+        if (confirm(bkm_ajax_takipx.strings.confirm_gorev_complete)) {
+            completeGorev(gorevId);
+        }
+    });
+    
+    // Görevi tamamla
+    function completeGorev(gorevId) {
+        $.ajax({
+            url: bkm_ajax_takipx.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'complete_gorev',
+                nonce: bkm_ajax_takipx.nonce,
+                gorev_id: gorevId
+            },
+            beforeSend: function() {
+                showLoader();
+            },
+            success: function(response) {
+                if (response.success) {
+                    showNotification('success', response.data.message);
+                    
+                    // Görevler listesini yenile
+                    const aksiyonId = $('#gorevler-modal .gorev-ekle-btn').data('aksiyon-id');
+                    loadGorevler(aksiyonId);
+                } else {
+                    showNotification('error', response.data.message);
+                }
+            },
+            error: function() {
+                showNotification('error', 'Görev tamamlanırken bir hata oluştu');
+            },
+            complete: function() {
+                hideLoader();
+            }
+        });
+    }
+    
+    // Görev sil butonuna tıklama
+    $(document).on('click', '.delete-gorev-btn', function(e) {
+        e.preventDefault();
+        const gorevId = $(this).data('id');
+        
+        if (confirm(bkm_ajax_takipx.strings.confirm_gorev_delete)) {
+            deleteGorev(gorevId);
+        }
+    });
+    
+    // Görevi sil
+    function deleteGorev(gorevId) {
+        $.ajax({
+            url: bkm_ajax_takipx.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'delete_gorev',
+                nonce: bkm_ajax_takipx.nonce,
+                gorev_id: gorevId
+            },
+            beforeSend: function() {
+                showLoader();
+            },
+            success: function(response) {
+                if (response.success) {
+                    showNotification('success', response.data.message);
+                    
+                    // Görevler listesini yenile
+                    const aksiyonId = $('#gorevler-modal .gorev-ekle-btn').data('aksiyon-id');
+                    loadGorevler(aksiyonId);
+                } else {
+                    showNotification('error', response.data.message);
+                }
+            },
+            error: function() {
+                showNotification('error', 'Görev silinirken bir hata oluştu');
+            },
+            complete: function() {
+                hideLoader();
+            }
+        });
     }
 });

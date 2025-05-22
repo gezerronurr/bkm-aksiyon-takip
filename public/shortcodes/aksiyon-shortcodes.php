@@ -135,6 +135,9 @@ class BKM_Aksiyon_Shortcodes {
         wp_enqueue_script($this->plugin_name . '-public');
         wp_enqueue_style('select2', 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css');
         wp_enqueue_script('select2', 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js', array('jquery'));
+        wp_enqueue_style('flatpickr', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css');
+        wp_enqueue_script('flatpickr', 'https://cdn.jsdelivr.net/npm/flatpickr', array('jquery'));
+        wp_enqueue_script('flatpickr-tr', 'https://npmcdn.com/flatpickr/dist/l10n/tr.js', array('flatpickr'));
 
         // Shortcode parametreleri
         $atts = shortcode_atts(array(
@@ -154,7 +157,9 @@ class BKM_Aksiyon_Shortcodes {
                 'success' => __('İşlem başarılı', 'bkm-aksiyon-takip'),
                 'loading' => __('Yükleniyor...', 'bkm-aksiyon-takip'),
                 'no_results' => __('Sonuç bulunamadı', 'bkm-aksiyon-takip'),
-                'confirm_delete' => __('Bu aksiyonu silmek istediğinize emin misiniz?', 'bkm-aksiyon-takip')
+                'confirm_delete' => __('Bu aksiyonu silmek istediğinize emin misiniz?', 'bkm-aksiyon-takip'),
+                'confirm_gorev_delete' => __('Bu görevi silmek istediğinize emin misiniz?', 'bkm-aksiyon-takip'),
+                'confirm_gorev_complete' => __('Bu görevi tamamlamak istediğinize emin misiniz?', 'bkm-aksiyon-takip')
             )
         ));
 
@@ -209,6 +214,7 @@ class BKM_Aksiyon_Shortcodes {
                 <table class="bkm-table" id="aksiyonlar-table">
                     <thead>
                         <tr>
+                            <th><?php _e('Görevler', 'bkm-aksiyon-takip'); ?></th>
                             <th>ID</th>
                             <th>Kategori</th>
                             <th>Önem</th>
@@ -236,6 +242,128 @@ class BKM_Aksiyon_Shortcodes {
                     </div>
                     <div class="bkm-modal-body">
                         <!-- AJAX ile doldurulacak -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Görev Ekle Modal -->
+            <div class="bkm-modal" id="gorev-ekle-modal">
+                <div class="bkm-modal-content">
+                    <div class="bkm-modal-header">
+                        <h2><?php _e('Görev Ekle', 'bkm-aksiyon-takip'); ?></h2>
+                        <span class="bkm-modal-close">&times;</span>
+                    </div>
+                    <div class="bkm-modal-body">
+                        <form id="gorev-ekle-form" class="bkm-form">
+                            <input type="hidden" name="action" value="save_gorev">
+                            <input type="hidden" name="gorev_id" id="gorev_id" value="">
+                            <input type="hidden" name="aksiyon_id" id="aksiyon_id" value="">
+                            <?php wp_nonce_field('bkm_aksiyon_takipx_nonce', 'gorev_nonce'); ?>
+                            
+                            <!-- Görev İçeriği -->
+                            <div class="form-group">
+                                <label for="gorev_icerik" class="form-label required">
+                                    <?php _e('Görevin İçeriği', 'bkm-aksiyon-takip'); ?>
+                                </label>
+                                <textarea name="gorev_icerik" id="gorev_icerik" class="form-control" rows="3" required></textarea>
+                            </div>
+
+                            <!-- Başlangıç Tarihi -->
+                            <div class="form-group">
+                                <label for="baslangic_tarihi" class="form-label required">
+                                    <?php _e('Başlangıç Tarihi', 'bkm-aksiyon-takip'); ?>
+                                </label>
+                                <input type="date" name="baslangic_tarihi" id="baslangic_tarihi" 
+                                       class="form-control datepicker" required>
+                            </div>
+
+                            <!-- Sorumlu Kişi -->
+                            <div class="form-group">
+                                <label for="sorumlu_id" class="form-label required">
+                                    <?php _e('Sorumlu Kişi', 'bkm-aksiyon-takip'); ?>
+                                </label>
+                                <select name="sorumlu_id" id="sorumlu_id" class="form-control select2" required>
+                                    <option value=""><?php _e('Seçiniz', 'bkm-aksiyon-takip'); ?></option>
+                                    <?php
+                                    $users = get_users(['role__in' => ['administrator', 'editor', 'author', 'contributor']]);
+                                    foreach ($users as $user): 
+                                    ?>
+                                        <option value="<?php echo esc_attr($user->ID); ?>">
+                                            <?php echo esc_html($user->display_name); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+
+                            <!-- Hedeflenen Bitiş Tarihi -->
+                            <div class="form-group">
+                                <label for="hedef_bitis_tarihi" class="form-label required">
+                                    <?php _e('Hedeflenen Bitiş Tarihi', 'bkm-aksiyon-takip'); ?>
+                                </label>
+                                <input type="date" name="hedef_bitis_tarihi" id="hedef_bitis_tarihi" 
+                                       class="form-control datepicker" required>
+                            </div>
+
+                            <!-- İlerleme Durumu -->
+                            <div class="form-group">
+                                <label for="ilerleme_durumu" class="form-label required">
+                                    <?php _e('İlerleme Durumu (%)', 'bkm-aksiyon-takip'); ?>
+                                </label>
+                                <div class="progress-input-container">
+                                    <input type="range" name="ilerleme_durumu" id="gorev_ilerleme_durumu" 
+                                           class="progress-slider" min="0" max="100" value="0" required>
+                                    <div class="progress-display">
+                                        <div class="progress">
+                                            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                                        </div>
+                                        <span class="progress-value">0%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="submit" class="bkm-btn primary">
+                                    <i class="fas fa-save"></i> <?php _e('Kaydet', 'bkm-aksiyon-takip'); ?>
+                                </button>
+                                <button type="button" class="bkm-btn secondary bkm-modal-cancel">
+                                    <i class="fas fa-times"></i> <?php _e('İptal', 'bkm-aksiyon-takip'); ?>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Görev Düzenle Modal -->
+            <div class="bkm-modal" id="gorev-duzenle-modal">
+                <div class="bkm-modal-content">
+                    <div class="bkm-modal-header">
+                        <h2><?php _e('Görevi Düzenle', 'bkm-aksiyon-takip'); ?></h2>
+                        <span class="bkm-modal-close">&times;</span>
+                    </div>
+                    <div class="bkm-modal-body">
+                        <!-- AJAX ile doldurulacak -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Görevler Modal -->
+            <div class="bkm-modal" id="gorevler-modal">
+                <div class="bkm-modal-content">
+                    <div class="bkm-modal-header">
+                        <h2><?php _e('Aksiyon Görevleri', 'bkm-aksiyon-takip'); ?></h2>
+                        <span class="bkm-modal-close">&times;</span>
+                    </div>
+                    <div class="bkm-modal-body">
+                        <!-- AJAX ile doldurulacak -->
+                    </div>
+                    <div class="bkm-modal-footer">
+                        <button type="button" class="bkm-btn primary gorev-ekle-btn">
+                            <i class="fas fa-plus"></i> <?php _e('Görev Ekle', 'bkm-aksiyon-takip'); ?>
+                        </button>
+                        <button type="button" class="bkm-btn secondary bkm-modal-cancel">
+                            <i class="fas fa-times"></i> <?php _e('Kapat', 'bkm-aksiyon-takip'); ?>
+                        </button>
                     </div>
                 </div>
             </div>

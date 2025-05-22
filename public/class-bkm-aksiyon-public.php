@@ -13,28 +13,42 @@ class BKM_Aksiyon_Public {
         $this->plugin_name = $plugin_name;
         $this->version = $version;
 
-        // Shortcode sınıfını başlat
-        require_once plugin_dir_path(dirname(__FILE__)) . 'public/shortcodes/aksiyon-shortcodes.php';
-        new BKM_Aksiyon_Shortcodes($this->plugin_name, $this->version);
+        $this->load_dependencies();
+        $this->register_shortcodes();
+        $this->init_ajax_handlers();
+    }
+
+    private function load_dependencies() {
+        require_once plugin_dir_path(__FILE__) . 'shortcodes/aksiyon-shortcodes.php';
     }
 
     /**
      * Public scripts
      */
-    public function enqueue_scripts() {
+    public function enqueue_public_assets() {
         // Styles
-        wp_enqueue_style($this->plugin_name . '-public', 
-            plugin_dir_url(__FILE__) . 'css/public.css', 
-            array(), 
-            $this->version, 
-            'all'
+        wp_enqueue_style(
+            $this->plugin_name . '-public',
+            plugin_dir_url(__FILE__) . 'css/public.css',
+            [],
+            $this->version
         );
 
         // Scripts
-        wp_enqueue_script($this->plugin_name . '-public',
+        wp_enqueue_script(
+            $this->plugin_name . '-public',
             plugin_dir_url(__FILE__) . 'js/public.js',
-            array('jquery'),
+            ['jquery'],
             $this->version,
+            true
+        );
+
+        // Add Handlebars.js for templating
+        wp_enqueue_script(
+            'handlebars',
+            'https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.7.7/handlebars.min.js',
+            [],
+            '4.7.7',
             true
         );
     }
@@ -197,6 +211,26 @@ class BKM_Aksiyon_Public {
         add_action('wp_ajax_load_aksiyon_detay', array($this, 'load_aksiyon_detay'));
         add_action('wp_ajax_nopriv_load_aksiyon_detay', array($this, 'load_aksiyon_detay'));
         
+        add_action('wp_ajax_update_aksiyon_ilerleme', array($this, 'update_aksiyon_ilerleme'));
+    }
+
+    public function register_shortcodes() {
+        $shortcodes = new BKM_Aksiyon_Shortcodes($this->plugin_name, $this->version);
+        
+        // Aksiyon şablonunu ekleyin
+        add_action('wp_footer', function() {
+            if (has_shortcode(get_post()->post_content, 'aksiyon_takipx')) {
+                include plugin_dir_path(__FILE__) . 'partials/aksiyon-row-template.php';
+            }
+        });
+    }
+
+    /**
+     * Register AJAX handlers
+     */
+    private function init_ajax_handlers() {
+        // Frontend AJAX handlers
+        add_action('wp_ajax_load_aksiyon_detay', array($this, 'load_aksiyon_detay'));
         add_action('wp_ajax_update_aksiyon_ilerleme', array($this, 'update_aksiyon_ilerleme'));
     }
 }
