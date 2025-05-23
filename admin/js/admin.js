@@ -1,23 +1,11 @@
 jQuery(document).ready(function($) {
-    const currentDate = '2025-05-21 08:35:08'; // UTC zaman bilgisi
+    const currentDate = '2025-05-22 14:17:38'; // UTC zaman bilgisi
     const currentUserLogin = 'gezerronurr';
-    let formChanged = false; // Form değişikliği takibi için
 
-    // Form değişiklik izleme
-    $('#bkm-aksiyon-form').on('change', 'input, select, textarea', function() {
-        formChanged = true;
-    });
+    // Form submit işlemi sırasında sayfa yönlendirme kontrolünü devre dışı bırak
+    window.onbeforeunload = null;
 
-    // Sayfadan çıkma uyarısı
-    $(window).on('beforeunload', function(e) {
-        if (formChanged) {
-            // Modern tarayıcılar için standart mesaj gösterilir
-            // Bu metin tarayıcılar tarafından genellikle göz ardı edilir
-            return 'Kaydedilmemiş değişiklikleriniz var. Sayfadan çıkmak istediğinize emin misiniz?';
-        }
-    });
-
-    // Select2 başlatma - güncellendi
+    // Select2 başlatma
     initializeSelect2();
     
     function initializeSelect2() {
@@ -31,7 +19,6 @@ jQuery(document).ready(function($) {
                 }
             }
         }).on('select2:select', function(e) {
-            // Select2 seçim sonrası tetikleyici
             $(this).trigger('change');
         });
     }
@@ -70,27 +57,20 @@ jQuery(document).ready(function($) {
                     break;
             }
         }
-    }).trigger('change'); // Sayfa yüklendiğinde mevcut seçimi göster
+    }).trigger('change');
 
     // Form gönderimi
     $('#bkm-aksiyon-form').on('submit', function(e) {
         e.preventDefault();
 
-        // Form validasyonu
         if (!validateForm()) {
             return false;
         }
 
-        // Sayfadan çıkma uyarısını kaldır
-        formChanged = false;
-        $(window).off('beforeunload');
-
-        // Form verilerini topla
         const formData = new FormData(this);
         formData.append('action', 'save_aksiyon');
         formData.append('nonce', bkm_admin.nonce);
 
-        // AJAX isteği
         $.ajax({
             url: bkm_admin.ajax_url,
             type: 'POST',
@@ -106,29 +86,21 @@ jQuery(document).ready(function($) {
                     showNotification('success', 'Aksiyon başarıyla kaydedildi');
                     logAction('create', response.data.aksiyon_id);
                     
-                    // Yönlendirme URL'sini kontrol et ve yönlendir
-                    if (response.data.redirect_url) {
-                        window.location.href = response.data.redirect_url;
-                    } else {
-                        // Eğer URL yoksa varsayılan olarak tüm aksiyonlar sayfasına git
-                        window.location.href = 'admin.php?page=bkm-aksiyon-takip';
-                    }
+                    // Form değişiklik kontrolünü devre dışı bırak
+                    window.onbeforeunload = null;
+                    
+                    // Sayfayı yönlendir
+                    window.location.href = 'admin.php?page=bkm-aksiyon-takip';
                 } else {
                     showNotification('error', response.data.message);
                     logError('save_aksiyon', response.data.message);
-                    // Hata durumunda formu tekrar etkinleştir
                     enableForm();
-                    // Hata durumunda uyarıyı tekrar etkinleştir
-                    formChanged = true;
                 }
             },
             error: function(xhr, status, error) {
                 showNotification('error', 'Bir hata oluştu: ' + error);
                 logError('save_aksiyon', error);
-                // Hata durumunda formu tekrar etkinleştir
                 enableForm();
-                // Hata durumunda uyarıyı tekrar etkinleştir
-                formChanged = true;
             },
             complete: function() {
                 hideLoader();
@@ -264,7 +236,7 @@ jQuery(document).ready(function($) {
         });
     }
 
-    // İlerleme çubuğu kontrolü - güncellendi
+    // İlerleme çubuğu kontrolü
     function initializeProgressBar() {
         const progressSlider = $('#ilerleme_durumu');
         const progressBar = progressSlider.closest('.progress-input-container').find('.progress-bar');
@@ -314,6 +286,37 @@ jQuery(document).ready(function($) {
         showNotification('info', 'Form temizlendi');
     });
 
+    // DataTables başlatma
+    if ($('#aksiyonlar-table').length) {
+        $('#aksiyonlar-table').DataTable({
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.10.24/i18n/Turkish.json'
+            },
+            pageLength: 25,
+            order: [[0, 'desc']],
+            responsive: true
+        });
+    }
+
+    // Filtre işlemleri
+    if ($('#filter-form').length) {
+        // Filtre temizleme
+        $('#clear-filters').on('click', function(e) {
+            e.preventDefault(); // Formun submit olmasını engelle
+            
+            // Select2 elementlerini temizle
+            $('.select2').each(function() {
+                $(this).val(null).trigger('change');
+            });
+            
+            // Form elementlerini sıfırla
+            $('#filter-form')[0].reset();
+            
+            // Sayfayı temiz haliyle yükle
+            window.location.href = 'admin.php?page=bkm-aksiyon-takip';
+        });
+    }
+
     // Otomatik kaydetme
     let autoSaveTimeout;
     const AUTO_SAVE_DELAY = 30000; // 30 saniye
@@ -348,17 +351,6 @@ jQuery(document).ready(function($) {
 
     // Sayfa yüklendiğinde otomatik kaydetmeyi başlat
     setupAutoSave();
-
-    // Form başlangıç durumunu kaydet
-    $('#bkm-aksiyon-form').data('original-state', $('#bkm-aksiyon-form').serialize());
-
-    // Sayfa kapatılmadan önce uyarı
-    $(window).on('beforeunload', function() {
-        const form = $('#bkm-aksiyon-form');
-        if (form.length && form.serialize() !== form.data('original-state')) {
-            return 'Kaydedilmemiş değişiklikler var. Sayfadan ayrılmak istediğinizden emin misiniz?';
-        }
-    });
 
     // Sayfa yüklendiğinde mevcut seçimleri göster
     $('#onem_derecesi, #ilerleme_durumu').trigger('change');
