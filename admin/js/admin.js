@@ -1,5 +1,5 @@
 jQuery(document).ready(function($) {
-    const currentDate = '2025-05-22 14:17:38'; // UTC zaman bilgisi
+    const currentDate = '2025-05-23 07:23:43'; // UTC zaman bilgisi
     const currentUserLogin = 'gezerronurr';
 
     // Form submit işlemi sırasında sayfa yönlendirme kontrolünü devre dışı bırak
@@ -314,6 +314,70 @@ jQuery(document).ready(function($) {
             
             // Sayfayı temiz haliyle yükle
             window.location.href = 'admin.php?page=bkm-aksiyon-takip';
+        });
+    }
+
+    // Aksiyon silme işlemi
+    $(document).on('click', '.delete-aksiyon', function(e) {
+        e.preventDefault();
+        const button = $(this);
+        const aksiyonId = button.data('id');
+        
+        if (confirm('Bu aksiyonu silmek istediğinizden emin misiniz?')) {
+            $.ajax({
+                url: bkm_admin.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'delete_aksiyon',
+                    nonce: bkm_admin.nonce,
+                    aksiyon_id: aksiyonId
+                },
+                beforeSend: function() {
+                    showLoader();
+                    button.prop('disabled', true);
+                },
+                success: function(response) {
+                    if (response.success) {
+                        showNotification('success', 'Aksiyon başarıyla silindi');
+                        // Tabloyu yeniden yükle
+                        button.closest('tr').fadeOut(400, function() {
+                            $(this).remove();
+                            // İstatistikleri güncelle
+                            updateStats();
+                        });
+                    } else {
+                        showNotification('error', response.data.message || 'Bir hata oluştu');
+                        button.prop('disabled', false);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    showNotification('error', 'Bir hata oluştu: ' + error);
+                    button.prop('disabled', false);
+                },
+                complete: function() {
+                    hideLoader();
+                }
+            });
+        }
+    });
+
+    // İstatistikleri güncelleme fonksiyonu
+    function updateStats() {
+        $.ajax({
+            url: bkm_admin.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_aksiyon_stats',
+                nonce: bkm_admin.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    $('.stat-pending .stat-value').text(response.data.open_count);
+                    $('.stat-completed .stat-value').text(response.data.completed_count);
+                    $('.stat-urgent .stat-value').text(response.data.urgent_count);
+                    $('.stat-mytasks .stat-value').text(response.data.my_tasks);
+                }
+            }
         });
     }
 
