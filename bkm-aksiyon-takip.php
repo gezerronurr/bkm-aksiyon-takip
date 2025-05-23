@@ -72,7 +72,10 @@ class BKM_Aksiyon_Takip {
         add_action('wp_ajax_load_gorevler', [$this, 'handle_load_gorevler']);
         add_action('wp_ajax_complete_gorev', [$this, 'handle_complete_gorev']);
         add_action('wp_ajax_load_gorev_detay', [$this, 'handle_load_gorev_detay']);
-    }
+    
+require_once BKM_AKSIYON_PLUGIN_DIR . 'public/shortcodes/aksiyon-shortcodes.php';
+    $this->shortcodes = new BKM_Aksiyon_Shortcodes('bkm-aksiyon-takip', BKM_AKSIYON_VERSION);
+}
     public function add_admin_menu() {
         // Ana menü
         $main_hook = add_menu_page(
